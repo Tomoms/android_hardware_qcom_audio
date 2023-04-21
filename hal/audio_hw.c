@@ -2485,6 +2485,7 @@ int select_devices(struct audio_device *adev, audio_usecase_t uc_id)
     if ((usecase->type == VOICE_CALL) ||
         (usecase->type == VOIP_CALL)  ||
         (usecase->type == PCM_HFP_CALL)) {
+        ALOGW("tom-audio: first if, first case");
         if(usecase->stream.out == NULL) {
             ALOGE("%s: stream.out is NULL", __func__);
             return -EINVAL;
@@ -2496,6 +2497,7 @@ int select_devices(struct audio_device *adev, audio_usecase_t uc_id)
                                                       usecase->stream.out->devices);
         usecase->devices = usecase->stream.out->devices;
     } else if (usecase->type == TRANSCODE_LOOPBACK_RX) {
+        ALOGW("tom-audio: first if second case");
         if (usecase->stream.inout == NULL) {
             ALOGE("%s: stream.inout is NULL", __func__);
             return -EINVAL;
@@ -2508,6 +2510,7 @@ int select_devices(struct audio_device *adev, audio_usecase_t uc_id)
                                                         &stream_out);
         usecase->devices = out_snd_device;
     } else if (usecase->type == TRANSCODE_LOOPBACK_TX ) {
+        ALOGW("tom-audio: first if, third case");
         if (usecase->stream.inout == NULL) {
             ALOGE("%s: stream.inout is NULL", __func__);
             return -EINVAL;
@@ -2515,6 +2518,7 @@ int select_devices(struct audio_device *adev, audio_usecase_t uc_id)
         in_snd_device = platform_get_input_snd_device(adev->platform, NULL, AUDIO_DEVICE_NONE);
         usecase->devices = in_snd_device;
     } else {
+        ALOGW("tom-audio: first if, else branch");
         /*
          * If the voice call is active, use the sound devices of voice call usecase
          * so that it would not result any device switch. All the usecases will
@@ -2525,6 +2529,7 @@ int select_devices(struct audio_device *adev, audio_usecase_t uc_id)
          * also using the codec backend
          */
         if (voice_is_in_call(adev) && adev->mode != AUDIO_MODE_NORMAL) {
+            ALOGW("tom-audio: nested if, first case");
             vc_usecase = get_usecase_from_list(adev,
                                                get_usecase_id_from_usecase_type(adev, VOICE_CALL));
             if ((vc_usecase) && (((vc_usecase->devices & AUDIO_DEVICE_OUT_ALL_CODEC_BACKEND) &&
@@ -2537,6 +2542,7 @@ int select_devices(struct audio_device *adev, audio_usecase_t uc_id)
                 out_snd_device = vc_usecase->out_snd_device;
             }
         } else if (voice_extn_compress_voip_is_active(adev)) {
+            ALOGW("tom-audio: nested if, second case");
             bool out_snd_device_backend_match = true;
             voip_usecase = get_usecase_from_list(adev, USECASE_COMPRESS_VOIP_CALL);
             if ((voip_usecase != NULL) &&
@@ -2557,6 +2563,7 @@ int select_devices(struct audio_device *adev, audio_usecase_t uc_id)
                     out_snd_device = voip_usecase->out_snd_device;
             }
         } else if (audio_extn_hfp_is_active(adev)) {
+            ALOGW("tom-audio: nested if, third case");
             hfp_ucid = audio_extn_hfp_get_usecase();
             hfp_usecase = get_usecase_from_list(adev, hfp_ucid);
             if ((hfp_usecase) && (hfp_usecase->devices & AUDIO_DEVICE_OUT_ALL_CODEC_BACKEND)) {
@@ -2630,6 +2637,8 @@ int select_devices(struct audio_device *adev, audio_usecase_t uc_id)
         }
     }
 
+    ALOGW("tom-audio: select_devices checkpoint 1");
+
     if (out_snd_device == usecase->out_snd_device &&
         in_snd_device == usecase->in_snd_device) {
 
@@ -2637,11 +2646,15 @@ int select_devices(struct audio_device *adev, audio_usecase_t uc_id)
             return 0;
     }
 
+    ALOGW("tom-audio: select_devices checkpoint 2");
+
     if ((is_btsco_device(out_snd_device,in_snd_device) && !adev->bt_sco_on) ||
          (is_a2dp_device(out_snd_device) && !audio_extn_a2dp_source_is_ready())) {
           ALOGD("SCO/A2DP is selected but they are not connected/ready hence dont route");
           return 0;
     }
+    
+    ALOGW("tom-audio: select_devices checkpoint 3");
 
     if (out_snd_device != SND_DEVICE_NONE &&
             out_snd_device != adev->last_logged_snd_device[uc_id][0]) {
@@ -2674,7 +2687,7 @@ int select_devices(struct audio_device *adev, audio_usecase_t uc_id)
         adev->last_logged_snd_device[uc_id][1] = in_snd_device;
     }
 
-
+    ALOGW("tom-audio: select_devices checkpoint 4");
     /*
      * Limitation: While in call, to do a device switch we need to disable
      * and enable both RX and TX devices though one of them is same as current
@@ -2685,6 +2698,8 @@ int select_devices(struct audio_device *adev, audio_usecase_t uc_id)
         (usecase->out_snd_device != SND_DEVICE_NONE)) {
         status = platform_switch_voice_call_device_pre(adev->platform);
     }
+    
+    ALOGW("tom-audio: select_devices checkpoint 5");
 
     if (((usecase->type == VOICE_CALL) ||
          (usecase->type == VOIP_CALL)) &&
@@ -2698,6 +2713,8 @@ int select_devices(struct audio_device *adev, audio_usecase_t uc_id)
         if (voice_is_call_state_active(adev))
             voice_check_and_update_aanc_path(adev, usecase->out_snd_device, false);
     }
+    
+    ALOGW("tom-audio: select_devices checkpoint 6");
 
     if ((out_snd_device == SND_DEVICE_OUT_SPEAKER_AND_BT_A2DP ||
          out_snd_device == SND_DEVICE_OUT_SPEAKER_SAFE_AND_BT_A2DP) &&
@@ -2757,6 +2774,8 @@ int select_devices(struct audio_device *adev, audio_usecase_t uc_id)
 
     audio_extn_utils_update_stream_app_type_cfg_for_usecase(adev,
                                                             usecase);
+    
+    ALOGW("tom-audio: select_devices checkpoint 7");
     if (usecase->type == PCM_PLAYBACK) {
         if ((24 == usecase->stream.out->bit_width) &&
                 (usecase->stream.out->devices & AUDIO_DEVICE_OUT_SPEAKER)) {
@@ -2794,7 +2813,7 @@ int select_devices(struct audio_device *adev, audio_usecase_t uc_id)
               out_snd_device == AUDIO_DEVICE_OUT_SPEAKER_SAFE) &&
             (voip_in_usecase->in_snd_device ==
             platform_get_input_snd_device(adev->platform, voip_in,
-                    &usecase->stream.out->device_list,usecase->type))) {
+                    usecase->stream.out->devices))) {
             /*
              * if VOIP TX is enabled before VOIP RX, needs to re-route the TX path
              * for enabling echo-reference-voip with correct port
@@ -2806,7 +2825,7 @@ int select_devices(struct audio_device *adev, audio_usecase_t uc_id)
             enable_audio_route(adev, voip_in_usecase);
         }
     }
-
+    ALOGW("tom-audio: select_devices checkpoint 8");
 
     audio_extn_qdsp_set_device(usecase);
 
@@ -2838,7 +2857,7 @@ int select_devices(struct audio_device *adev, audio_usecase_t uc_id)
         status = platform_switch_voice_call_usecase_route_post(adev->platform,
                                                                out_snd_device,
                                                                in_snd_device);
-
+    ALOGW("tom-audio: select_devices checkpoint 9  ee");
     if (is_btsco_device(out_snd_device, in_snd_device) || is_a2dp_device(out_snd_device)) {
          struct stream_in *in = adev_get_active_input(adev);
          if (usecase->type == VOIP_CALL) {
@@ -2868,7 +2887,7 @@ int select_devices(struct audio_device *adev, audio_usecase_t uc_id)
               }
          }
     }
-
+    ALOGW("tom-audio: select_devices checkpoint 10");
     if (usecase->type != PCM_CAPTURE && usecase == voip_usecase) {
         struct stream_out *voip_out = voip_usecase->stream.out;
         audio_extn_utils_send_app_type_gain(adev,
@@ -6461,8 +6480,10 @@ static void in_snd_mon_cb(void * stream, struct str_parms * parms)
 
     // a better solution would be to report error back to AF and let
     // it put the stream to standby
-    if (status == CARD_STATUS_OFFLINE)
+    if (status == CARD_STATUS_OFFLINE) {
+        ALOGW("tom-audio: card is offline, calling in_standby");
         in_standby(&in->stream.common);
+    }
 
     return;
 }
@@ -6775,6 +6796,7 @@ exit:
             bytes_read = bytes;
             memset(buffer, 0, bytes);
         }
+        ALOGW("tom-audio: calling in_standby in in_read due to not being in USECASE_COMPRESS_VOIP_CALL");
         in_standby(&in->stream.common);
         if (in->usecase == USECASE_AUDIO_RECORD_LOW_LATENCY)
             adev->adm_routing_changed = false;
@@ -9232,8 +9254,10 @@ static void adev_close_input_stream(struct audio_hw_device *dev,
         if (ret != 0)
             ALOGE("%s: Compress voip input cannot be closed, error:%d",
                   __func__, ret);
-    } else
+    } else {
         in_standby(&stream->common);
+        ALOGW("tom-audio: closing input stream and calling in_standby");
+    }
 
     pthread_mutex_lock(&adev->lock);
     if (in->usecase == USECASE_AUDIO_RECORD) {
