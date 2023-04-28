@@ -6658,7 +6658,7 @@ static ssize_t in_read(struct audio_stream_in *stream, void *buffer,
                        size_t bytes)
 {
     struct stream_in *in = (struct stream_in *)stream;
-
+    ALOGW("tom-audio: started in_read");
     if (in == NULL) {
         ALOGE("%s: stream_in ptr is NULL", __func__);
         return -EINVAL;
@@ -6671,6 +6671,7 @@ static ssize_t in_read(struct audio_stream_in *stream, void *buffer,
     lock_input_stream(in);
 
     if (in->is_st_session) {
+        ALOGW("tom-audio: %s 1", __func__);
         ALOGVV(" %s: reading on st session bytes=%zu", __func__, bytes);
         /* Read from sound trigger HAL */
         audio_extn_sound_trigger_read(in, buffer, bytes);
@@ -6683,22 +6684,27 @@ static ssize_t in_read(struct audio_stream_in *stream, void *buffer,
     }
 
     if (in->usecase == USECASE_AUDIO_RECORD_MMAP) {
+        ALOGW("tom-audio: %s 2", __func__);
         ret = -ENOSYS;
         goto exit;
     }
 
     if (in->usecase == USECASE_AUDIO_RECORD_LOW_LATENCY &&
         !in->standby && adev->adm_routing_changed) {
+        ALOGW("tom-audio: %s 3", __func__);
         ret = -ENOSYS;
         goto exit;
     }
 
     if (in->standby) {
         pthread_mutex_lock(&adev->lock);
-        if (in->usecase == USECASE_COMPRESS_VOIP_CALL)
+        if (in->usecase == USECASE_COMPRESS_VOIP_CALL) {
             ret = voice_extn_compress_voip_start_input_stream(in);
-        else
+            ALOGW("tom-audio: %s 4", __func__);
+        } else {
             ret = start_input_stream(in);
+            ALOGW("tom-audio: %s 5", __func__);
+        }
         if (!ret && in->source == AUDIO_SOURCE_VOICE_RECOGNITION)
             adev->num_va_sessions++;
 
@@ -6707,9 +6713,11 @@ static ssize_t in_read(struct audio_stream_in *stream, void *buffer,
 
         pthread_mutex_unlock(&adev->lock);
         if (ret != 0) {
+            ALOGW("tom-audio: %s 6", __func__);
             goto exit;
         }
         in->standby = 0;
+        ALOGW("tom-audio: %s 7", __func__);
     }
 
     /* Avoid read if capture_stopped is set */
@@ -6727,22 +6735,31 @@ static ssize_t in_read(struct audio_stream_in *stream, void *buffer,
                                              in->config.rate;
 
     ret = request_in_focus(in, ns);
-    if (ret != 0)
+    if (ret != 0) {
+        ALOGW("tom-audio: %s 8", __func__);
         goto exit;
+    }
     bool use_mmap = is_mmap_usecase(in->usecase) || in->realtime;
 
     if (audio_extn_cin_attached_usecase(in->usecase)) {
+        ALOGW("tom-audio: %s 9", __func__);
         ret = audio_extn_cin_read(in, buffer, bytes, &bytes_read);
     } else if (in->pcm) {
+        ALOGW("tom-audio: %s 10", __func__);
         if (audio_extn_ssr_get_stream() == in) {
+            ALOGW("tom-audio: %s 11", __func__);
             ret = audio_extn_ssr_read(stream, buffer, bytes);
         } else if (audio_extn_compr_cap_usecase_supported(in->usecase)) {
+            ALOGW("tom-audio: %s 12", __func__);
             ret = audio_extn_compr_cap_read(in, buffer, bytes);
         } else if (use_mmap) {
+            ALOGW("tom-audio: %s 13", __func__);
             ret = pcm_mmap_read(in->pcm, buffer, bytes);
         } else if (audio_extn_ffv_get_stream() == in) {
+            ALOGW("tom-audio: %s 14", __func__);
             ret = audio_extn_ffv_read(stream, buffer, bytes);
         } else {
+            ALOGW("tom-audio: %s 15", __func__);
             ret = pcm_read(in->pcm, buffer, bytes);
             /* data from DSP comes in 24_8 format, convert it to 8_24 */
             if (!ret && bytes > 0 && (in->format == AUDIO_FORMAT_PCM_8_24_BIT)) {
@@ -6760,7 +6777,7 @@ static ssize_t in_read(struct audio_stream_in *stream, void *buffer,
     }
 
     release_in_focus(in);
-
+    ALOGW("tom-audio: %s 16", __func__);
     /*
      * Instead of writing zeroes here, we could trust the hardware to always
      * provide zeroes when muted. This is also muted with voice recognition
@@ -6777,6 +6794,7 @@ static ssize_t in_read(struct audio_stream_in *stream, void *buffer,
         memset(buffer, 0, bytes);
 
 exit:
+    ALOGW("tom-audio: %s 17 exit", __func__);
     frame_size = audio_stream_in_frame_size(stream);
     if (frame_size > 0)
         in->frames_read += bytes_read/frame_size;
@@ -6786,17 +6804,20 @@ exit:
     pthread_mutex_unlock(&in->lock);
 
     if (ret != 0) {
+        ALOGW("tom-audio: %s 18", __func__);
         if (in->usecase == USECASE_COMPRESS_VOIP_CALL) {
+            ALOGW("tom-audio: we are in USECASE_COMPRESS_VOIP_CALL! which has id %d", USECASE_COMPRESS_VOIP_CALL);
             pthread_mutex_lock(&adev->lock);
             voice_extn_compress_voip_close_input_stream(&in->stream.common);
             pthread_mutex_unlock(&adev->lock);
             in->standby = true;
         }
         if (!audio_extn_cin_attached_usecase(in->usecase)) {
+            ALOGW("tom-audio: %s 19", __func__);
             bytes_read = bytes;
             memset(buffer, 0, bytes);
         }
-        ALOGW("tom-audio: calling in_standby in in_read due to not being in USECASE_COMPRESS_VOIP_CALL");
+        ALOGW("tom-audio: calling in_standby in in_read due to not being in USECASE_COMPRESS_VOIP_CALL, we are instead in %d", in->usecase);
         in_standby(&in->stream.common);
         if (in->usecase == USECASE_AUDIO_RECORD_LOW_LATENCY)
             adev->adm_routing_changed = false;
@@ -6804,6 +6825,7 @@ exit:
         usleep((uint64_t)bytes * 1000000 / audio_stream_in_frame_size(stream) /
                                    in_get_sample_rate(&in->stream.common));
     }
+    ALOGW("tom-audio: %s returning", __func__);
     return bytes_read;
 }
 
